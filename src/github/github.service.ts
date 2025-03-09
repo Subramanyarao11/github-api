@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { CacheService } from 'src/cache/cache.service';
 
 @Injectable()
 export class GitHubService implements OnModuleInit {
   private octokit: any;
   private username: string;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private cacheService: CacheService,
+  ) {
     this.username = this.configService.get<string>('GITHUB_USERNAME');
   }
 
@@ -18,6 +22,15 @@ export class GitHubService implements OnModuleInit {
   }
 
   async getUserProfile() {
+    const cacheKey = this.cacheService.generateProfileCacheKey(this.username);
+    console.log(cacheKey);
+    const cachedData = await this.cacheService.get(cacheKey);
+    console.log(cachedData);
+
+    if (cachedData) {
+      return cachedData;
+    }
+
     try {
       const { data: user } = await this.octokit.users.getByUsername({
         username: this.username,
@@ -29,7 +42,7 @@ export class GitHubService implements OnModuleInit {
         per_page: 100,
       });
 
-      return {
+      const result = {
         username: user.login,
         name: user.name,
         followers: user.followers,
@@ -46,12 +59,23 @@ export class GitHubService implements OnModuleInit {
           updated_at: repo.updated_at,
         })),
       };
+
+      await this.cacheService.set(cacheKey, result);
+      return result;
     } catch (error) {
       throw new Error(`Failed to fetch GitHub profile: ${error.message}`);
     }
   }
 
   async getRepositoryDetails(repoName: string) {
+    const cacheKey = this.cacheService.generateRepoCacheKey(
+      this.username,
+      repoName,
+    );
+    const cachedData = await this.cacheService.get(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
     try {
       const { data: repo } = await this.octokit.repos.get({
         owner: this.username,
@@ -75,7 +99,7 @@ export class GitHubService implements OnModuleInit {
         per_page: 10,
       });
 
-      return {
+      const result = {
         name: repo.name,
         full_name: repo.full_name,
         description: repo.description,
@@ -100,6 +124,9 @@ export class GitHubService implements OnModuleInit {
           url: issue.html_url,
         })),
       };
+
+      await this.cacheService.set(cacheKey, result);
+      return result;
     } catch (error) {
       if (error.status === 404) {
         throw new NotFoundException(`Repository "${repoName}" not found`);
@@ -116,6 +143,8 @@ export class GitHubService implements OnModuleInit {
         title,
         body,
       });
+
+      await this.cacheService.invalidateRepoCacheKey(this.username, repoName);
 
       return {
         number: issue.number,

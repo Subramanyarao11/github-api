@@ -6,11 +6,14 @@ import {
   Body,
   UsePipes,
   ValidationPipe,
+  UseGuards,
 } from '@nestjs/common';
 import { GitHubService } from './github.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 @Controller('github')
+@UseGuards(ThrottlerGuard)
 export class GitHubController {
   constructor(private readonly gitHubService: GitHubService) {}
 
