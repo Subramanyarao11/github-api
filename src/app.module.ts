@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -7,6 +7,8 @@ import { GitHubModule } from './github/github.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
 import { CacheModule } from './cache/cache.module';
+import { AnalyticsMiddleware } from './common/middleware/analytics.middleware';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -31,8 +33,13 @@ import { CacheModule } from './cache/cache.module';
     }),
     GitHubModule,
     CacheModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(AnalyticsMiddleware).forRoutes('*');
+  }
+}
